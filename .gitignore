@@ -42,3 +42,8 @@
 
 # ignore build stuff
 build/
+
+# ignore raylib includes
+include/raylib.h
+include/rlgl.h 
+include/raymath.h 
