@@ -40,7 +40,5 @@
 # debug information files
 *.dwo
 
+# ignore build stuff
 build/
-!build/.gitkeep
-libs/
-!libs/.gitkeep
