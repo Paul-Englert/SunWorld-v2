@@ -54,6 +54,79 @@ namespace Sunworld {
 
         if (transition) {
 
+            enum class FadeDirection {
+                OUT, IN
+            };
+
+            class ScreenTransition : public Screen {
+                public:
+                    ScreenTransition(Screen *previous, Screen *next) {
+
+                        this->previous = previous;
+                        this->next = next;
+
+                    }
+                    virtual ~ScreenTransition() override {
+
+                        delete previous;
+
+                    }
+                    virtual void UpdateGameplay() override {
+
+                        #define ALPHA_STEP 10
+
+                        if (direction == FadeDirection::OUT) {
+
+                            int newAlpha = alpha + ALPHA_STEP;
+                            if (newAlpha >= 255) {
+                                newAlpha = 255;
+                            }
+
+                            if (newAlpha == 255) {
+                                direction = FadeDirection::IN;
+                            }
+
+                            alpha = newAlpha;
+
+                        } else if (direction == FadeDirection::IN) {
+
+                            int newAlpha = alpha - ALPHA_STEP;
+                            if (newAlpha <= 0) {
+                                newAlpha = 0;
+                            }
+
+                            if (newAlpha == 0) {
+                                Sunworld::SwitchScreen(next, false);
+                            }
+
+                            alpha = newAlpha;
+
+                        }
+
+                        #undef ALPHA_STEP
+                        
+                    }
+                    virtual void RenderScreen(float partialTick) override {
+                        if (direction == FadeDirection::OUT) {
+
+                            previous->RenderScreen(partialTick);
+
+                        } else if (direction == FadeDirection::IN) {
+
+                            next->RenderScreen(partialTick);
+
+                        }
+
+                        const Color c{0, 0, 0, alpha};
+                        DrawRectangle(0, 0, GetRenderWidth(), GetRenderHeight(), c);
+
+                    }
+                private:
+                    Screen *previous, *next;
+                    unsigned char alpha = 0;
+                    FadeDirection direction = FadeDirection::OUT;
+            };
+
             Screen *current = State.screen;
 
             Screen *transitionScreen = new ScreenTransition(current, screen);

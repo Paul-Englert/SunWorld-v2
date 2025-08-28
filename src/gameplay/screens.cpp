@@ -7,70 +7,6 @@
 #include "../../include/raylib.h"
 
 /**
- * ScreenTransition
- */
-
-ScreenTransition::ScreenTransition(Screen *previous, Screen *next) {
-    this->previous = previous;
-    this->next = next;
-}
-
-ScreenTransition::~ScreenTransition() {
-
-    delete previous;
-
-}
-
-void ScreenTransition::RenderScreen(float partialTick) {
-
-    if (direction == FadeDirection::OUT) {
-
-        previous->RenderScreen(partialTick);
-
-    } else if (direction == FadeDirection::IN) {
-
-        next->RenderScreen(partialTick);
-
-    }
-
-    const Color c{0, 0, 0, alpha};
-    DrawRectangle(0, 0, GetRenderWidth(), GetRenderHeight(), c);
-
-}
-
-void ScreenTransition::UpdateGameplay() {
-
-    #define ALPHA_STEP 5
-
-    if (direction == FadeDirection::OUT) {
-
-        alpha += ALPHA_STEP;
-
-        if (alpha >= 255) {
-
-            alpha = 255;
-            direction = FadeDirection::IN;
-
-        }
-
-    } else if (direction == FadeDirection::IN) {
-
-        alpha -= ALPHA_STEP;
-
-        if (alpha <= 0) {
-
-            alpha = 0;
-            Sunworld::SwitchScreen(next, false);
-
-        }
-
-    }
-
-    #undef ALPHA_STEP
-
-}
-
-/**
  * ScreenMainMenu
  */
 
@@ -82,7 +18,11 @@ ScreenMainMenu::ScreenMainMenu() : assetManager(Sunworld::GetCoreAssetManager())
 
 void ScreenMainMenu::UpdateGameplay() {
 
-    
+    if (IsKeyDown(KEY_SPACE)) {
+
+        Sunworld::SwitchScreen(new ScreenMainMenu());
+
+    }
 
 }
 

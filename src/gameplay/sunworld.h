@@ -16,6 +16,8 @@ namespace Sunworld {
 
     /**
      * Wird in main() als Teil des normalen Shutdown-Prozederes aufgerufen.
+     * 
+     * Sollte sonst nicht aufgerufen werden, stattdessen sollte Exit() benutzt werden.
      */
     void Shutdown();
 
