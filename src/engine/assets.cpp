@@ -213,6 +213,7 @@ FontRenderer::FontRenderer(std::string fontDir) {
 
 Texture2D FontRenderer::GetCharTexture(char c) {
 
+    //Buchstabentexturen werden nochmal extra gecached (obwohl der AssetManager das auch schon tut), um die Ermittlung des korrekten Texturenpfades nicht bei jedem Aufruf durchlaufen zu müssen.
     if (cachedTextures.contains(c)) {
 
         return cachedTextures[c];

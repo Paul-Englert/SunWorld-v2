@@ -65,7 +65,7 @@ class FontRenderer {
         /**
          * Gibt Höhe und Breite dieses Strings zurück, eventuell unter Berücksichtigung eines Scale Faktors.
          */
-        Vector2 MeasureString(std::string, float scaleFactor = 1.0f);
+        Vector2 MeasureString(std::string str, float scaleFactor = 1.0f);
         /**
          * Zeichnet einen String und gibt dann Höhe und Breite, eventuell unter Berücksichtigung eines Scale Faktors, zurück.
          */

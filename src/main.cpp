@@ -2,27 +2,44 @@
 
 #include "../include/raylib.h"
 #include "engine/assets.h"
+#include "engine/timer.h"
 #include "io/debug.h"
+#include "gameplay/sunworld.h"
+
+static constexpr int TICKS_PER_SECOND = 20;
 
 int main() {
 
-    Debug::Log(Debug::LogLevel::INFO, "Launching Sun World...");
+    InitWindow(1000, 800, "Sun World");
 
-    InitWindow(800, 400, "Sun World");
+    {
+        const int  display = GetCurrentMonitor();
+        SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display));
+        ToggleFullscreen();
+    }
 
-    FontRenderer fontRenderer("assets/font/");
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+
+    Sunworld::Init();
+
+    TickTimer timer(TICKS_PER_SECOND);
 
     while (!WindowShouldClose()) {
 
-        BeginDrawing();
-        {
-            fontRenderer.DrawString("Sun World", {100, 100}, 5.3259f);
+        if (timer.ShouldTick()) {
+
+            Sunworld::Update();
+
         }
-        EndDrawing();
+
+        BeginDrawing(); {
+
+            Sunworld::Render(timer.GetPartialTick());
+            
+        } EndDrawing();
 
     }
 
-    Debug::Log("Exiting...");
     CloseWindow();
 
     return 0;
