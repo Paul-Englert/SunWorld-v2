@@ -21,14 +21,3 @@ target_link_libraries(SunWorld PRIVATE
     winmm
     m
 )
-
-option(RUN_AFTER_BUILD "Run after building" ON)
-
-if(RUN_AFTER_BUILD)
-    add_custom_target(run_${PROJECT_NAME}
-        COMMAND ${CMAKE_COMMAND} -E echo "Running ${PROJECT_NAME}..."
-        COMMAND ${CMAKE_COMMAND} -E env $<TARGET_FILE:${PROJECT_NAME}>
-        DEPENDS ${PROJECT_NAME}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-endif()
