@@ -46,6 +46,16 @@ bool TickTimer::ShouldTick() {
 
 }
 
+int TickTimer::GetElapsedTicks() {
+
+    const int millisF = static_cast<int>(GetElapsedMillis());
+    const int tickTime = static_cast<int>(this->tickTime);
+
+    return millisF/tickTime;
+
+
+}
+
 float TickTimer::GetPartialTick() const {
 
     const float millisF = static_cast<float>(GetElapsedMillis());

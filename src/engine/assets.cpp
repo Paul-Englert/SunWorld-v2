@@ -3,6 +3,60 @@
 #include "../io/debug.h"
 
 #include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <cctype>
+
+Animation::Animation(Texture2D spriteAtlas, std::vector<Rectangle> frames, std::vector<int> frameLayout, int fps, AnimationType type) 
+: atlas(spriteAtlas), frames(frames), frameLayout(frameLayout), type(type), timer(TickTimer(fps)) 
+{}
+
+TextureInfo Animation::TextureInfo() {
+
+    if (timer.ShouldTick()) {
+        if (type == AnimationType::LOOPING) {
+
+            ++framePtr;
+            if (framePtr >= frameLayout.size())
+                framePtr = 0;
+
+        } else if (type == AnimationType::BACK_AND_FORTH) {
+
+            if (dir == BackAndForthDirection::INC) {
+
+                ++framePtr;
+                if (framePtr >= frameLayout.size()) {
+                    framePtr -= 2;
+                    dir = BackAndForthDirection::DEC;
+                }
+
+            } else if (dir == BackAndForthDirection::DEC) {
+
+                --framePtr;
+                if (framePtr < 0) {
+                    framePtr = 1;
+                    dir = BackAndForthDirection::INC;
+                }
+
+            }
+
+        }
+    }
+
+    const Rectangle frame = frames[frameLayout[framePtr]];
+
+    return {
+        .texture      = atlas,
+        .textureFrame = frame
+    };
+
+}
+
+void Animation::Free() {
+
+    UnloadTexture(atlas);
+
+}
 
 AssetManager::AssetManager(AssetManager *parent) {
     this->parent = parent;
@@ -16,6 +70,10 @@ AssetManager::~AssetManager() {
 
     for (auto it = loadedSounds.begin(); it != loadedSounds.end(); ++it) {
         UnloadSound(it->second);
+    }
+
+    for (auto it = loadedAnimations.begin(); it != loadedSounds.end(); ++it) {
+        it->second->Free();
     }
 
 }
@@ -205,6 +263,148 @@ Texture2D AssetManager::UploadCustomTexture(std::string identifier, Image image)
 
 }
 
+std::optional<std::string> AssetManager::ReadResourceFile(std::string identifier) {
+
+    if (parent != nullptr) {
+
+        std::optional<std::string> parentRet = parent->ReadResourceFile(identifier);
+        if (parentRet.has_value()) {
+            return parentRet;
+        }
+
+    }
+
+    std::vector<std::string> paths;
+    paths.emplace_back(identifier);
+    for (std::string searchDir : searchDirs) {
+
+        std::string str = searchDir;
+        str += identifier;
+        paths.emplace_back(str);
+
+    }
+
+    for (std::string path : paths) {
+
+        if (!std::filesystem::exists(path)) {
+            Debug::Log(Debug::LogLevel::DEBUG, "path does not exist: %s", path.c_str());
+            continue;
+        }
+
+        std::ifstream in(path);
+        if (!in.is_open()) {
+            Debug::Log(Debug::LogLevel::ERROR, "Could not open file %s.", path.c_str());
+            return std::nullopt;
+        }
+        std::ostringstream out;
+
+        out << in.rdbuf();
+
+        return out.str();
+
+    }
+
+    return std::nullopt;
+
+}
+
+std::optional<Animation*> AssetManager::GetAnimation(std::string identifier) {
+
+    if (parent != nullptr) {
+
+        std::optional<Animation*> parentRet = parent->GetAnimation(identifier);
+        if (parentRet.has_value()){
+            return parentRet;
+        }
+
+    }
+
+    if (loadedAnimations.contains(identifier)) {
+        return loadedAnimations[identifier];
+    }
+
+    std::optional<std::string> opt = ReadResourceFile(identifier);
+
+    if (!opt.has_value()) {
+        Debug::Log(Debug::LogLevel::ERROR, "Could not load animation because file reading failed.");
+        return std::nullopt;
+    }
+
+    Dictionary aniFileContent = ParseDictionary(opt.value(), "\n", "->");
+
+    std::vector<std::string> base64Textures;
+    base64Textures.reserve(ANIMATION_MAX_FRAMES);
+    base64Textures.resize(ANIMATION_MAX_FRAMES);
+    int frameCount;
+    int fps;
+    AnimationType type;
+    std::vector<int> frameLayout;
+
+    for (auto it = aniFileContent.begin(); it != aniFileContent.end(); ++it) {
+
+        std::string key = it->first;
+        std::string value = it->second;
+
+        Debug::Debug("key is %s", key.c_str());
+
+        if (IsPositiveInt(key)) {
+            int index = std::stoi(key);
+            base64Textures[index] = value;
+        } else if (key.compare("typ") == 0 || key.compare("type") == 0) {
+
+            if (value.compare("back/forth") == 0) {
+                type = AnimationType::BACK_AND_FORTH;
+            } else if (value.compare("looping") == 0) {
+                type = AnimationType::LOOPING;
+            } else {
+                Debug::Log(Debug::LogLevel::ERROR, "Could not parse .ani file: Unknown animation type '%s'.", value.c_str());
+                return std::nullopt;
+            }
+
+        } else if (key.compare("fps") == 0) {
+
+            fps = std::stoi(value);
+
+        } else if (key.compare("frames") == 0) {
+
+            frameLayout = ParsePositiveIntList(value, ",");
+
+        }
+
+    }
+    frameCount = frameLayout.size();
+
+    std::vector<Texture2D> loadedTextures;
+    for (int index = 0; index < base64Textures.size(); ++index) {
+        std::string data = base64Textures[index];
+
+        if (data.empty()) continue;
+
+        const std::string prefix = "data:image/png;base64,";
+        if (data.rfind(prefix, 0) == 0) {
+            data = data.substr(prefix.size());
+        }
+
+        std::vector<unsigned char> decoded = Base64Decode(data);
+
+        Image image = LoadImageFromMemory(".png", decoded.data(), decoded.size());
+
+        Texture2D texture = LoadTextureFromImage(image);
+        loadedTextures.push_back(texture);
+
+        UnloadImage(image);
+    }
+
+    std::vector<Rectangle> frames;
+    Texture2D spriteAtlas = BuildSpriteAtlas(loadedTextures, &frames);
+
+    Animation *animation = animationAllocator.Alloc<Animation>();
+    *animation = Animation(spriteAtlas, frames, frameLayout, fps, type);
+
+    return animation;
+
+}
+
 FontRenderer::FontRenderer(std::string fontDir) {
 
     fontAssetManager.AddSearchDir(fontDir);
@@ -389,4 +589,122 @@ Vector2 FontRenderer::DrawStringAndMeasure(std::string str, Vector2 position, fl
 
     return {x, height};
 
+}
+
+Dictionary ParseDictionary(std::string str, std::string entryDelimiter, std::string kvDelimiter) {
+
+    Dictionary out;
+
+    size_t newLinePos = -1;
+    while ((newLinePos = str.find(entryDelimiter)) != std::string::npos) {
+        std::string entry = str.substr(0, newLinePos);
+
+        size_t delimiterPos = entry.find(kvDelimiter);
+        std::string key = entry.substr(0, delimiterPos);
+        std::string value = entry.substr(delimiterPos+kvDelimiter.size(), entry.size());
+
+        out[key] = value;
+
+        str.erase(0, newLinePos + entryDelimiter.size());
+    }
+
+    if (!str.empty()) {
+        size_t delimiterPos = str.find(kvDelimiter);
+        if (delimiterPos != std::string::npos) {
+            std::string key = str.substr(0, delimiterPos);
+            std::string value = str.substr(delimiterPos + kvDelimiter.size());
+            out[key] = value;
+        }
+    }
+
+    return out;
+}
+
+bool IsPositiveInt(const std::string& str) {
+
+    for (size_t i = 0; i < str.length(); ++i) {
+
+        if (!std::isdigit(str[i])) 
+            return false;
+
+    }
+
+    return true;
+
+}
+
+std::vector<int> ParsePositiveIntList(std::string str, std::string delimiter) {
+
+    std::vector<int> out;
+
+    size_t delimiterPos = -1;
+    while ((delimiterPos = str.find(delimiter)) != std::string::npos) {
+        std::string num = str.substr(0, delimiterPos);
+
+        if (!IsPositiveInt(num)) {
+            Debug::Log(Debug::LogLevel::WARNING, "While trying to parse positive int list, entry '%s' was not a positive integer. Skipping entry.", str.c_str());
+            continue;
+        }
+
+        out.emplace_back(std::stoi(num));
+
+        str.erase(0, delimiterPos + delimiter.size());
+    }
+
+    return out;
+
+}
+
+//aus dem internet gekalut
+//hoffentlich funktioniert das auch
+std::vector<unsigned char> Base64Decode(const std::string& in) {
+    static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    std::vector<int> T(256, -1);
+    for (int i = 0; i < 64; i++) T[chars[i]] = i;
+
+    std::vector<unsigned char> out;
+    out.reserve(in.size() * 3 / 4);
+
+    int val = 0, valb = -8;
+    for (unsigned char c : in) {
+        if (T[c] == -1) break;
+        val = (val << 6) + T[c];
+        valb += 6;
+        if (valb >= 0) {
+            out.push_back(char((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return out;
+}
+
+Texture2D BuildSpriteAtlas(const std::vector<Texture2D>& textures, std::vector<Rectangle> *frameInfoOutput) {
+
+    const int frameCount = (int)textures.size();
+    const int frameWidth = textures[0].width;
+    const int frameHeight = textures[0].height;
+
+    RenderTexture2D target = LoadRenderTexture(frameCount * frameWidth, frameHeight);
+    BeginTextureMode(target);
+    ClearBackground(BLANK);
+
+    for (int i = 0; i < frameCount; i++) {
+        DrawTexture(textures[i], i * frameWidth, 0, WHITE);
+    }
+
+    EndTextureMode();
+
+    Texture2D atlas = target.texture;
+    Image atlasImg = LoadImageFromTexture(target.texture);
+    atlas = LoadTextureFromImage(atlasImg);
+    UnloadImage(atlasImg);
+    UnloadRenderTexture(target);
+
+    frameInfoOutput->resize(frameCount);
+    for (int i = 0; i < frameCount; i++) {
+        (*frameInfoOutput)[i] = { (float)(i * frameWidth), 0.0f, (float)frameWidth, (float)frameHeight };
+    }
+
+    return atlas;
 }

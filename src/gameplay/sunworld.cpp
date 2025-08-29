@@ -16,7 +16,7 @@ namespace Sunworld {
 
         //alle Suchordner zu coreAssetManager hinzufügen
         {
-
+            State.coreAssetManager.AddSearchDir("assets/");
         }
 
         State.screen = new ScreenMainMenu();
@@ -30,6 +30,8 @@ namespace Sunworld {
     }
 
     void Render(float partialTick) {
+
+        ClearBackground(WHITE);
 
         State.screen->RenderScreen(partialTick);
 

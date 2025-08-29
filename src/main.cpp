@@ -11,6 +11,7 @@ static constexpr int TICKS_PER_SECOND = 20;
 int main() {
 
     InitWindow(1000, 800, "Sun World");
+    InitAudioDevice();
 
     {
         const int  display = GetCurrentMonitor();
@@ -40,6 +41,7 @@ int main() {
 
     }
 
+    CloseAudioDevice();
     CloseWindow();
 
     return 0;

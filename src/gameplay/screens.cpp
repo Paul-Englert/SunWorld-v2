@@ -28,8 +28,6 @@ void ScreenMainMenu::UpdateGameplay() {
 
 void ScreenMainMenu::RenderScreen(float partialTick) {
 
-    ClearBackground(WHITE);
-
     Texture2D background = assetManager.GetTexture("background.png").value();
     FillScreenWithTexture(background);
 

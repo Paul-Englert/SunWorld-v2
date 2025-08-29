@@ -2,14 +2,43 @@
 
 #include "../../include/raylib.h"
 
+#include "timer.h"
+#include "allocator.h"
+
 #include <functional>
 #include <unordered_map>
 #include <string>
 #include <optional>
+#include <queue>
 
-struct TextureInfo {
-    std::string identifier;
-    unsigned int u, v;
+enum class AnimationType {
+
+    LOOPING, BACK_AND_FORTH
+
+};
+
+enum class BackAndForthDirection {
+    INC, DEC
+};
+
+inline constexpr size_t ANIMATION_MAX_FRAMES = 32;
+
+//Eine Animation braucht mindestens 2 Frames, ansonsten passieren komische Sachen (array out of bounds).
+class Animation final {
+    public:
+        Animation(Texture2D spriteAtlas, std::vector<Rectangle> frames, std::vector<int> frameLayout, int fps, AnimationType type);
+        TextureInfo TextureInfo();
+        void Free();
+    private:
+        Texture2D atlas;
+        std::vector<Rectangle> frames;
+        std::vector<int> frameLayout;
+        int framePtr = 0;
+
+        AnimationType type;
+        //wird nur benutzt wenn type == BACK_AND_FORTH
+        BackAndForthDirection dir = BackAndForthDirection::INC;
+        TickTimer timer;
 };
 
 class AssetManager {
@@ -45,6 +74,15 @@ class AssetManager {
          * Erstellt eine Textur aus einem Bild. Kann verwendet werden, um über LoadRawImage() ein Bild zu laden, es zu verändern, und dann als Textur hochzuladen.
          */
         Texture2D UploadCustomTexture(std::string identifier, Image image);
+        /**
+         * Liest eine Datei ein und gibt das Ergebnis als String zurück.
+         */
+        std::optional<std::string> ReadResourceFile(std::string identifier);
+        /**
+         * Lädt eine Animation und gibt einen Zeiger zu dieser zurück.
+         * Alle Animationen werden innerhalb des AssetManagers gespeichert; Interaktion erfolgt nur über Zeiger damit der State der Animationen konsistent bleibt.
+         */
+        std::optional<Animation*> GetAnimation(std::string identifier);
     private:
         std::optional<Texture2D> _GetTexture(std::string identifier);
         std::optional<Sound> _GetSound(std::string identifier);
@@ -52,7 +90,9 @@ class AssetManager {
         std::vector<std::string> searchDirs;
         std::unordered_map<std::string, Texture2D> loadedTextures;
         std::unordered_map<std::string, Sound> loadedSounds;
-};
+        std::unordered_map<std::string, Animation*> loadedAnimations;
+        ArenaAllocator<sizeof(Animation)*64> animationAllocator;
+    };
 
 class FontRenderer {
     public:
@@ -76,3 +116,64 @@ class FontRenderer {
         std::unordered_map<char, Texture2D> cachedTextures;
         static constexpr inline float spaceWidth = 16;
 };
+
+struct SoundQueueEntry {
+    bool isSilence;
+    union {
+        struct {
+            Sound sound;
+            bool looping;
+            bool fadeOut;
+            int fadeInMillis;
+            bool fadeIn;
+            int fadeOutMillis;
+        };
+        int silenceMillis;
+    };
+};
+
+enum class SoundQueueState {
+
+    EMPTY,
+    SILENCE,
+    PLAYING,
+    FADING_IN,
+    FADING_OUT
+
+};
+
+class SoundQueue {
+    public:
+        SoundQueue() = default;
+        ~SoundQueue() = default;
+        void QueueSilence(int silenceMillis);
+        void Queue(Sound sound);
+        void QueueFadeIn(Sound sound, int fadeInMillis);
+        void QueueFadeOut(Sound sound, int fadeOutMillis);
+        void QueueFadeInAndOut(Sound sound, int fadeInMillis, int fadeOutMillis);
+        void QueueLooping(Sound sound);
+        void QueueLoopingFadeIn(Sound sound, int fadeInMillis);
+        void QueueLoopingFadeOut(Sound sound, int fadeOutMillis);
+        void QueueLoopingFadeInAndOut(Sound sound, int fadeInMillis, int fadeOutMillis);
+        void FadeOutAndSkipToNext(int fadeOutMillis);
+        void SkipToNext();
+        void Update();
+        bool IsEmpty();
+        void Clear();
+    private:
+        std::queue<SoundQueueEntry> queuedSounds;
+        bool fadingOutAbnormally = false;
+        int abnormalFadeOutMillis = -1;
+};
+
+using Dictionary = std::unordered_map<std::string, std::string>;
+
+Dictionary ParseDictionary(std::string stringToParse, std::string entryDelimiter, std::string keyValueDelimiter);
+
+bool IsPositiveInt(const std::string& str);
+
+std::vector<int> ParsePositiveIntList(std::string stringToParse, std::string delimiter);
+
+std::vector<unsigned char> Base64Decode(const std::string& in);
+
+Texture2D BuildSpriteAtlas(const std::vector<Texture2D>& textures, std::vector<Rectangle> *frameInfoOutput);
