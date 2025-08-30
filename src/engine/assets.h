@@ -27,7 +27,6 @@ inline constexpr size_t ANIMATION_MAX_FRAMES = 32;
 class Animation final {
     public:
         Animation(Texture2D spriteAtlas, std::vector<Rectangle> frames, std::vector<int> frameLayout, int fps, AnimationType type);
-        TextureInfo TextureInfo();
         void Free();
     private:
         Texture2D atlas;
@@ -119,17 +118,11 @@ class FontRenderer {
 
 struct SoundQueueEntry {
     bool isSilence;
-    union {
-        struct {
-            Sound sound;
-            bool looping;
-            bool fadeOut;
-            int fadeInMillis;
-            bool fadeIn;
-            int fadeOutMillis;
-        };
-        int silenceMillis;
-    };
+    int silenceMillis;
+    Sound sound;
+    bool looping;
+    bool fadeIn;
+    int fadeInMillis;
 };
 
 enum class SoundQueueState {
@@ -144,26 +137,25 @@ enum class SoundQueueState {
 
 class SoundQueue {
     public:
-        SoundQueue() = default;
+        SoundQueue();
         ~SoundQueue() = default;
         void QueueSilence(int silenceMillis);
         void Queue(Sound sound);
         void QueueFadeIn(Sound sound, int fadeInMillis);
-        void QueueFadeOut(Sound sound, int fadeOutMillis);
-        void QueueFadeInAndOut(Sound sound, int fadeInMillis, int fadeOutMillis);
         void QueueLooping(Sound sound);
         void QueueLoopingFadeIn(Sound sound, int fadeInMillis);
-        void QueueLoopingFadeOut(Sound sound, int fadeOutMillis);
-        void QueueLoopingFadeInAndOut(Sound sound, int fadeInMillis, int fadeOutMillis);
-        void FadeOutAndSkipToNext(int fadeOutMillis);
         void SkipToNext();
+        void FadeOutAndSkipToNext(int fadeOutMillis);
         void Update();
         bool IsEmpty();
         void Clear();
     private:
+        void BeginPlaying();
         std::queue<SoundQueueEntry> queuedSounds;
-        bool fadingOutAbnormally = false;
-        int abnormalFadeOutMillis = -1;
+        SoundQueueState state = SoundQueueState::EMPTY;
+        int fadeMillis = -1;
+        TickTimer silenceTimer;
+        TickTimer fadeTimer;
 };
 
 using Dictionary = std::unordered_map<std::string, std::string>;

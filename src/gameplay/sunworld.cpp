@@ -9,6 +9,7 @@ namespace Sunworld {
     struct {
         AssetManager coreAssetManager;
         FontRenderer fontRenderer{"assets/font/"};
+        SoundQueue musicQueue;
         Screen *screen{nullptr};
     } State;
 
@@ -17,13 +18,29 @@ namespace Sunworld {
         //alle Suchordner zu coreAssetManager hinzufügen
         {
             State.coreAssetManager.AddSearchDir("assets/");
+            State.coreAssetManager.AddSearchDir("assets/music/");
         }
 
         State.screen = new ScreenMainMenu();
 
+        State.musicQueue.QueueLoopingFadeIn(
+            State.coreAssetManager.GetSound("funky.wav").value(),
+            5000
+        );
+
+        State.musicQueue.QueueSilence(2500);
+
+        State.musicQueue.QueueFadeIn(
+            State.coreAssetManager.GetSound("intro.wav").value(),
+            5000
+        );
+        
+
     }
 
     void Update() {
+
+        State.musicQueue.Update();
 
         State.screen->UpdateGameplay();
 
@@ -158,6 +175,12 @@ namespace Sunworld {
     AssetManager *GetCoreAssetManager() {
 
         return &State.coreAssetManager;
+
+    }
+
+    SoundQueue *GetMainSoundQueue() {
+
+        return &State.musicQueue;
 
     }
 

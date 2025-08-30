@@ -20,6 +20,7 @@ void ScreenMainMenu::UpdateGameplay() {
 
     if (IsKeyDown(KEY_SPACE)) {
 
+        Sunworld::GetMainSoundQueue()->FadeOutAndSkipToNext(5000);
         Sunworld::SwitchScreen(new ScreenMainMenu());
 
     }

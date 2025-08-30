@@ -31,4 +31,6 @@ namespace Sunworld {
 
     AssetManager *GetCoreAssetManager();
 
+    SoundQueue *GetMainSoundQueue();
+
 }

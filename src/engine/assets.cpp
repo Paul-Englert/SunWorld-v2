@@ -7,10 +7,15 @@
 #include <sstream>
 #include <cctype>
 
+/**
+ * Animaton class
+ */
+
 Animation::Animation(Texture2D spriteAtlas, std::vector<Rectangle> frames, std::vector<int> frameLayout, int fps, AnimationType type) 
 : atlas(spriteAtlas), frames(frames), frameLayout(frameLayout), type(type), timer(TickTimer(fps)) 
 {}
 
+/*
 TextureInfo Animation::TextureInfo() {
 
     if (timer.ShouldTick()) {
@@ -50,13 +55,17 @@ TextureInfo Animation::TextureInfo() {
         .textureFrame = frame
     };
 
-}
+} */
 
 void Animation::Free() {
 
     UnloadTexture(atlas);
 
 }
+
+/**
+ * AssetManager class
+ */
 
 AssetManager::AssetManager(AssetManager *parent) {
     this->parent = parent;
@@ -72,7 +81,7 @@ AssetManager::~AssetManager() {
         UnloadSound(it->second);
     }
 
-    for (auto it = loadedAnimations.begin(); it != loadedSounds.end(); ++it) {
+    for (auto it = loadedAnimations.begin(); it != loadedAnimations.end(); ++it) {
         it->second->Free();
     }
 
@@ -405,6 +414,10 @@ std::optional<Animation*> AssetManager::GetAnimation(std::string identifier) {
 
 }
 
+/**
+ * FontRenderer class
+ */
+
 FontRenderer::FontRenderer(std::string fontDir) {
 
     fontAssetManager.AddSearchDir(fontDir);
@@ -590,6 +603,184 @@ Vector2 FontRenderer::DrawStringAndMeasure(std::string str, Vector2 position, fl
     return {x, height};
 
 }
+
+/**
+ * SoundQueue class
+ */
+
+SoundQueue::SoundQueue() : silenceTimer(1), fadeTimer(1) {}
+
+void SoundQueue::QueueSilence(int silenceMillis) {
+    SoundQueueEntry sqe{};
+    sqe.isSilence = true;
+    sqe.silenceMillis = silenceMillis;
+    queuedSounds.emplace(sqe);
+    if (IsEmpty())
+        BeginPlaying();
+}
+
+void SoundQueue::Queue(Sound sound) {
+    SoundQueueEntry sqe{};
+    sqe.isSilence = false;
+    sqe.sound = sound;
+    const bool wasEmpty = IsEmpty();
+    queuedSounds.emplace(sqe);
+    if (wasEmpty)
+        BeginPlaying();
+}
+
+void SoundQueue::QueueFadeIn(Sound sound, int fadeInMillis) {
+    SoundQueueEntry sqe{};
+    sqe.sound = sound;
+    sqe.fadeIn = true;
+    sqe.fadeInMillis = fadeInMillis;
+    const bool wasEmpty = IsEmpty();
+    queuedSounds.emplace(sqe);
+    if (wasEmpty)
+        BeginPlaying();
+}
+
+void SoundQueue::QueueLooping(Sound sound) {
+    SoundQueueEntry sqe{};
+    sqe.sound = sound;
+    sqe.looping = true;
+    const bool wasEmpty = IsEmpty();
+    queuedSounds.emplace(sqe);
+    if (wasEmpty)
+        BeginPlaying();
+}
+
+void SoundQueue::QueueLoopingFadeIn(Sound sound, int fadeInMillis) {
+    SoundQueueEntry sqe{};
+    sqe.sound = sound;
+    sqe.looping = true;
+    sqe.fadeIn = true;
+    sqe.fadeInMillis = fadeInMillis;
+    const bool wasEmpty = IsEmpty();
+    queuedSounds.emplace(sqe);
+    if (wasEmpty)
+        BeginPlaying();
+}
+
+void SoundQueue::SkipToNext() {
+    queuedSounds.pop();
+    BeginPlaying();
+}
+
+void SoundQueue::FadeOutAndSkipToNext(int fadeOutMillis) {
+
+    fadeTimer.Reset();
+    fadeMillis = fadeOutMillis;
+    state = SoundQueueState::FADING_OUT;
+
+}
+
+void SoundQueue::BeginPlaying() {
+    if (queuedSounds.empty()) {
+        state = SoundQueueState::EMPTY;
+        return;
+    }
+    SoundQueueEntry entry = queuedSounds.front();
+    if (entry.isSilence) {
+        silenceTimer.Reset();
+        state = SoundQueueState::SILENCE;
+        return;
+    }
+    if (entry.fadeIn) {
+        state = SoundQueueState::FADING_IN;
+        fadeMillis = entry.fadeInMillis;
+        fadeTimer.Reset();
+        SetSoundVolume(entry.sound, 0);
+    } else {
+        state = SoundQueueState::PLAYING;
+        SetSoundVolume(entry.sound, 1.0f);
+    }
+    PlaySound(entry.sound);
+}
+
+void SoundQueue::Update() {
+
+    if (queuedSounds.empty())
+        return;
+
+    SoundQueueEntry entry = queuedSounds.front();
+    if (entry.isSilence) {
+
+        if (silenceTimer.GetElapsedMillis() >= entry.silenceMillis) {
+            queuedSounds.pop();
+            BeginPlaying();
+        }
+
+    } else {
+
+        Sound sound = entry.sound;
+        if (!IsSoundPlaying(sound)) {
+
+            if (entry.looping) {
+                PlaySound(sound);
+            } else {
+                queuedSounds.pop();
+                BeginPlaying();
+            }
+
+        }
+
+    }
+
+    if (state == SoundQueueState::FADING_IN) {
+
+        Sound sound = entry.sound;
+        const int elapsedMillis = static_cast<int>(fadeTimer.GetElapsedMillis());
+
+        if (elapsedMillis >= fadeMillis) {
+
+            state = SoundQueueState::PLAYING;
+            SetSoundVolume(sound, 1.0f);
+
+        } else {
+
+            const float ratio = (elapsedMillis * 1.0f) / (fadeMillis * 1.0f);
+            SetSoundVolume(sound, ratio);
+
+        }
+
+    } else if (state == SoundQueueState::FADING_OUT) {
+
+        Sound sound = entry.sound;
+        const int elapsedMillis = static_cast<int>(fadeTimer.GetElapsedMillis());
+
+        if (elapsedMillis >= fadeMillis) {
+
+            queuedSounds.pop();
+            BeginPlaying();
+
+        } else {
+
+            const float ratio = (elapsedMillis * 1.0f) / (fadeMillis * 1.0f);
+            SetSoundVolume(sound, 1-ratio);
+
+        }
+
+    }
+
+}
+
+bool SoundQueue::IsEmpty() {
+    return queuedSounds.empty();
+}
+
+void SoundQueue::Clear() {
+
+    while (!queuedSounds.empty()) 
+        queuedSounds.pop();
+    
+    state = SoundQueueState::EMPTY;
+
+}
+
+/**
+ * Free functions
+ */
 
 Dictionary ParseDictionary(std::string str, std::string entryDelimiter, std::string kvDelimiter) {
 
